@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import CurrentStringAnalysis from './components/CurrentStringAnalysis';
 import StringCard from './components/StringCard';
 import { FONTS, PRIORITIES, styles } from './lib/constants';
@@ -66,6 +67,7 @@ export default function App() {
 
   return (
     <>
+      <SpeedInsights />
       <style>{FONTS + styles}</style>
       <div className="app">
         <div className="hero">
