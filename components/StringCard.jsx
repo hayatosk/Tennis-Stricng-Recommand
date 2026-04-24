@@ -1,7 +1,7 @@
 import StatBar from './StatBar';
 import { SPEC_LABELS } from '../lib/constants';
 
-export default function StringCard({ string, index }) {
+export default function StringCard({ string, index, onSaveToLog }) {
   const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : index === 3 ? 'fourth' : 'fifth';
   return (
     <div className="string-card">
@@ -54,6 +54,14 @@ export default function StringCard({ string, index }) {
             <div className="hybrid-title">🔀 하이브리드 추천 조합</div>
             <p className="hybrid-text">{string.hybrid_combo}</p>
           </div>
+        )}
+        {onSaveToLog && (
+          <button
+            onClick={() => onSaveToLog(string)}
+            className="block w-full mt-4 px-4 py-2.5 bg-emerald-400/8 hover:bg-emerald-400/15 border border-emerald-400/22 rounded-xl text-emerald-400 text-[13px] font-medium tracking-wide cursor-pointer transition-colors"
+          >
+            이 세팅 로그북에 저장 →
+          </button>
         )}
       </div>
     </div>
