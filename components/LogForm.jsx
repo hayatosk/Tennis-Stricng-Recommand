@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { RACKET_BRANDS, RACKET_MODELS, HEAD_SIZES, GRIP_SIZES, RACKET_WEIGHTS } from '../lib/racketDatabase';
+import { STRING_BRANDS, STRING_MODELS, STRING_TYPES, GAUGE_OPTIONS, POLYGON_TYPES } from '../lib/stringBrands';
 import { DEFAULT_LOG, SCORE_FIELDS, SCORE_MAX, SCORE_MIN } from '../lib/logModel';
 
 // ─── 유효성 검사 ──────────────────────────────────────────────────────────────
@@ -68,23 +70,55 @@ export default function LogForm({
   const [form, setForm] = useState({ ...DEFAULT_LOG, ...initialValues });
   const [errors, setErrors] = useState({});
 
-  // 필드 값 변경 — 에러 동시 제거
   const set = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     if (errors[key]) setErrors((prev) => { const next = { ...prev }; delete next[key]; return next; });
   };
 
-  // 점수 슬라이더 — 1~10 범위 강제
   const setScore = (key, raw) => {
     const clamped = Math.min(SCORE_MAX, Math.max(SCORE_MIN, Number(raw)));
     set(key, clamped);
   };
 
+  // 라켓 브랜드 변경 시 모델 초기화
+  const handleRacketBrandChange = (brand) => {
+    set('racketBrand', brand);
+    set('racketModel', '');
+  };
+
+  // 스트링 브랜드 변경 시 모델 초기화
+  const handleStringBrandChange = (brand) => {
+    set('mainStringBrand', brand);
+    set('mainString', '');
+  };
+
+  // 각줄 primary 카테고리
+  const primaryShape = POLYGON_TYPES.includes(form.mainStringShape)
+    ? '각줄'
+    : (form.mainStringShape || '');
+
+  const handlePrimaryShapeChange = (val) => {
+    if (val === '원형' || val === '기타' || val === '') {
+      set('mainStringShape', val);
+    } else if (val === '각줄') {
+      set('mainStringShape', '4각형');
+    }
+  };
+
+  // 현재 브랜드에 맞는 라켓 모델 목록 (A-Z 정렬)
+  const racketModels = form.racketBrand && RACKET_MODELS[form.racketBrand]
+    ? [...RACKET_MODELS[form.racketBrand]].sort()
+    : [];
+
+  // 현재 스트링 브랜드에 맞는 모델 목록 (A-Z 정렬)
+  const stringModels = form.mainStringBrand && STRING_MODELS[form.mainStringBrand]
+    ? [...STRING_MODELS[form.mainStringBrand]].sort()
+    : [];
+
   function handleSubmit() {
     const errs = validate(form);
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
-      // 첫 번째 에러 필드로 스크롤
       const el = document.querySelector('[data-error="true"]');
       el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
@@ -97,54 +131,181 @@ export default function LogForm({
 
       {/* ── 라켓 정보 ─────────────────────────────────────────── */}
       <SectionLabel>라켓 정보</SectionLabel>
+
+      {/* 브랜드 + 모델명 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="브랜드" hint="예: Wilson, Babolat">
-          <input
+        <Field label="브랜드">
+          <select
             className={inputCls()}
-            placeholder="Wilson"
             value={form.racketBrand}
-            onChange={(e) => set('racketBrand', e.target.value)}
-          />
+            onChange={(e) => handleRacketBrandChange(e.target.value)}
+          >
+            <option value="">브랜드 선택</option>
+            {RACKET_BRANDS.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
         </Field>
-        <Field label="모델명" hint="예: Blade 98">
-          <input
+
+        <Field label="모델명">
+          <select
             className={inputCls()}
-            placeholder="Blade 98"
             value={form.racketModel}
             onChange={(e) => set('racketModel', e.target.value)}
-          />
+            disabled={!form.racketBrand}
+          >
+            <option value="">
+              {form.racketBrand ? '모델 선택' : '브랜드를 먼저 선택하세요'}
+            </option>
+            {racketModels.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      {/* 헤드사이즈 + 그립사이즈 + 무게 */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+        <Field label="헤드사이즈 (sq in)">
+          <select
+            className={inputCls()}
+            value={form.headSize}
+            onChange={(e) => set('headSize', e.target.value)}
+          >
+            <option value="">선택</option>
+            {HEAD_SIZES.map((s) => (
+              <option key={s} value={`${s} sq in`}>{s} sq in</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="그립사이즈">
+          <select
+            className={inputCls()}
+            value={form.gripSize}
+            onChange={(e) => set('gripSize', e.target.value)}
+          >
+            <option value="">선택</option>
+            {GRIP_SIZES.map((g) => (
+              <option key={g.value} value={g.value}>{g.label}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="무게 (g)">
+          <select
+            className={inputCls()}
+            value={form.racketWeight}
+            onChange={(e) => set('racketWeight', e.target.value)}
+          >
+            <option value="">선택</option>
+            {RACKET_WEIGHTS.map((w) => (
+              <option key={w} value={`${w}g`}>{w}g</option>
+            ))}
+          </select>
         </Field>
       </div>
 
       {/* ── 스트링 정보 ───────────────────────────────────────── */}
       <SectionLabel>스트링 정보</SectionLabel>
+
+      {/* 메인 스트링 브랜드 + 모델 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="메인 스트링" required error={errors.mainString}>
-          <input
+        <Field label="메인 스트링 브랜드" required>
+          <select
+            className={inputCls()}
+            value={form.mainStringBrand}
+            onChange={(e) => handleStringBrandChange(e.target.value)}
+          >
+            <option value="">브랜드 선택</option>
+            {STRING_BRANDS.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="메인 스트링 모델" required error={errors.mainString}>
+          <select
             data-error={!!errors.mainString}
             className={inputCls(!!errors.mainString)}
-            placeholder="예: Hyper-G"
             value={form.mainString}
             onChange={(e) => set('mainString', e.target.value)}
-          />
-        </Field>
-        <Field label="크로스 스트링" hint="하이브리드">
-          <input
-            className={inputCls()}
-            placeholder="예: NXT"
-            value={form.crossString}
-            onChange={(e) => set('crossString', e.target.value)}
-          />
+            disabled={!form.mainStringBrand}
+          >
+            <option value="">
+              {form.mainStringBrand ? '모델 선택' : '브랜드를 먼저 선택하세요'}
+            </option>
+            {stringModels.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
         </Field>
       </div>
-      <Field label="게이지" hint="예: 16L (1.25mm)">
+
+      {/* 크로스 스트링 */}
+      <Field label="크로스 스트링" hint="하이브리드">
         <input
           className={inputCls()}
-          placeholder="16L (1.25mm)"
-          value={form.gauge}
-          onChange={(e) => set('gauge', e.target.value)}
+          placeholder="예: NXT"
+          value={form.crossString}
+          onChange={(e) => set('crossString', e.target.value)}
         />
       </Field>
+
+      {/* 타입 + 모양 + 게이지 */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-1">
+        <Field label="타입">
+          <select
+            className={inputCls()}
+            value={form.mainStringType}
+            onChange={(e) => set('mainStringType', e.target.value)}
+          >
+            <option value="">선택</option>
+            {STRING_TYPES.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="모양">
+          <div className="flex flex-col gap-2">
+            <select
+              className={inputCls()}
+              value={primaryShape}
+              onChange={(e) => handlePrimaryShapeChange(e.target.value)}
+            >
+              <option value="">선택</option>
+              <option value="원형">원형</option>
+              <option value="각줄">각줄</option>
+              <option value="기타">기타</option>
+            </select>
+            {primaryShape === '각줄' && (
+              <select
+                className={inputCls()}
+                value={form.mainStringShape}
+                onChange={(e) => set('mainStringShape', e.target.value)}
+              >
+                {POLYGON_TYPES.map((pt) => (
+                  <option key={pt} value={pt}>{pt}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </Field>
+
+        <Field label="게이지">
+          <select
+            className={inputCls()}
+            value={form.gauge}
+            onChange={(e) => set('gauge', e.target.value)}
+          >
+            <option value="">선택</option>
+            {GAUGE_OPTIONS.map((g) => (
+              <option key={g.value} value={g.value}>{g.label}</option>
+            ))}
+          </select>
+        </Field>
+      </div>
 
       {/* ── 텐션 ─────────────────────────────────────────────── */}
       <SectionLabel>텐션</SectionLabel>

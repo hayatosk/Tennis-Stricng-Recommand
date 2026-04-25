@@ -54,7 +54,7 @@ function LogCard({ log, onDelete }) {
           {[log.racketBrand, log.racketModel].filter(Boolean).join(' ') || '라켓 미입력'}
         </div>
         <div className="text-sm text-emerald-400 mt-0.5">
-          {log.mainString || '스트링 미입력'}
+          {[log.mainStringBrand, log.mainString].filter(Boolean).join(' ') || '스트링 미입력'}
           {log.crossString && log.crossString !== log.mainString && (
             <span className="text-white/35"> × {log.crossString}</span>
           )}
@@ -192,6 +192,7 @@ export default function LogPage() {
     if (q) {
       result = result.filter(
         (l) =>
+          (l.mainStringBrand || '').toLowerCase().includes(q) ||
           l.mainString.toLowerCase().includes(q) ||
           l.crossString.toLowerCase().includes(q)
       );

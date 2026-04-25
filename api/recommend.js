@@ -1,11 +1,4 @@
-/* global process */
 import { analyzeCurrentString, getRuleBasedRecommendations } from '../lib/recommend.js';
-
-const AI_TIMEOUT_MS = 7000;
-
-function getFallback(currentAnalysis, recommendations) {
-  return { current_analysis: currentAnalysis, recommendations };
-}
 
 function buildPrompt(form, currentAnalysis, recommendations) {
   return `너는 테니스 스트링 전문가다. 이미 계산된 추천 결과를 더 읽기 쉽게 한국어로 다듬어라.
@@ -32,37 +25,31 @@ ${JSON.stringify(recommendations, null, 2)}
 
 async function enhanceWithAI(form, currentAnalysis, recommendations) {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return getFallback(currentAnalysis, recommendations);
+  if (!apiKey) return { current_analysis: currentAnalysis, recommendations };
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: buildPrompt(form, currentAnalysis, recommendations) }] }],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 2200,
+        responseMimeType: 'application/json',
+      },
+    }),
+  });
+
+  if (!response.ok) return { current_analysis: currentAnalysis, recommendations };
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) return { current_analysis: currentAnalysis, recommendations };
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: buildPrompt(form, currentAnalysis, recommendations) }] }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 2200,
-          responseMimeType: 'application/json',
-        },
-      }),
-    });
-
-    if (!response.ok) return getFallback(currentAnalysis, recommendations);
-    const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return getFallback(currentAnalysis, recommendations);
-
+    console.log('recommend request body:', form);
     return JSON.parse(text);
-  } catch (error) {
-    console.warn('AI enhancement skipped:', error?.message || error);
-    return getFallback(currentAnalysis, recommendations);
-  } finally {
-    clearTimeout(timeoutId);
+  } catch {
+    return { current_analysis: currentAnalysis, recommendations };
   }
 }
 
@@ -73,7 +60,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const form = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const form = req.body;
     const current_analysis = analyzeCurrentString(form);
     const recommendations = getRuleBasedRecommendations(form);
     const enhanced = await enhanceWithAI(form, current_analysis, recommendations);

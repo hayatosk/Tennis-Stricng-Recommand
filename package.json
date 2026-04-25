@@ -4,20 +4,17 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --configLoader native",
-    "build": "vite build --configLoader native",
+    "dev": "vite",
+    "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "optimize": "vite optimize --configLoader native --force"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.2.4",
-    "@vercel/speed-insights": "^2.0.0",
-    "lightningcss": "^1.32.0",
+    "@tailwindcss/vite": "^4.2.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.1",
-    "tailwindcss": "^4.2.4"
+    "tailwindcss": "^4.2.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

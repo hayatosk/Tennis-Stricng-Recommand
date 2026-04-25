@@ -136,7 +136,7 @@ export default function LogDetailPage() {
             <span className="text-white/50 font-normal">{log.racketModel}</span>
           </h1>
           <div className="text-base text-emerald-400 mt-1">
-            {log.mainString || '스트링 미입력'}
+            {[log.mainStringBrand, log.mainString].filter(Boolean).join(' ') || '스트링 미입력'}
             {log.crossString && log.crossString !== log.mainString && (
               <span className="text-white/30"> × {log.crossString}</span>
             )}
@@ -147,7 +147,15 @@ export default function LogDetailPage() {
         <SectionCard title="라켓 & 스트링">
           <InfoRow label="라켓 브랜드"   value={log.racketBrand} />
           <InfoRow label="라켓 모델"     value={log.racketModel} />
-          <InfoRow label="메인 스트링"   value={log.mainString} />
+          {log.headSize    && <InfoRow label="헤드사이즈"   value={log.headSize} />}
+          {log.gripSize    && <InfoRow label="그립사이즈"   value={log.gripSize} />}
+          {log.racketWeight && <InfoRow label="무게"        value={log.racketWeight} />}
+          <InfoRow
+            label="메인 스트링"
+            value={[log.mainStringBrand, log.mainString].filter(Boolean).join(' ') || undefined}
+          />
+          {log.mainStringType  && <InfoRow label="스트링 타입" value={log.mainStringType} />}
+          {log.mainStringShape && <InfoRow label="스트링 모양" value={log.mainStringShape} />}
           <InfoRow label="크로스 스트링" value={log.crossString} />
           <InfoRow label="게이지"        value={log.gauge} />
         </SectionCard>

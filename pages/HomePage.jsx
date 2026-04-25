@@ -1,8 +1,9 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import CurrentStringAnalysis from '../components/CurrentStringAnalysis';
 import StringCard from '../components/StringCard';
 import { FONTS, PRIORITIES, styles } from '../lib/constants';
+import { analyzeCurrentString, getRuleBasedRecommendations } from '../lib/recommend';
 import { sanitizeForm } from '../lib/sanitize';
 import { loadSavedForm, saveForm } from '../lib/storage';
 
@@ -25,7 +26,7 @@ const defaultForm = {
 
 export default function HomePage() {
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
   const [form, setForm] = useState(defaultForm);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -48,13 +49,20 @@ export default function HomePage() {
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const setPriority = (key, value) => setForm((prev) => ({ ...prev, priorities: { ...prev.priorities, [key]: Number(value) } }));
 
-  async function submitWithData(formData) {
+  function buildLocalResult(payload) {
+    return {
+      current_analysis: analyzeCurrentString(payload),
+      recommendations: getRuleBasedRecommendations(payload),
+    };
+  }
+
+  async function submitWithData(data) {
     setLoading(true);
     setError(null);
     setResult(null);
 
     try {
-      const payload = sanitizeForm(formData);
+      const payload = sanitizeForm(data);
 
       const response = await fetch('/api/recommend', {
         method: 'POST',
@@ -63,27 +71,29 @@ export default function HomePage() {
       });
 
       const rawText = await response.text();
+      const contentType = response.headers.get('content-type') || '';
 
-      let responseData;
+      if (!rawText.trim() || !contentType.includes('application/json')) {
+        setResult(buildLocalResult(payload));
+        return;
+      }
+
+      let parsedData;
       try {
-        if (!rawText.trim()) {
-          throw new Error(`서버가 빈 응답을 반환했습니다. 상태 코드: ${response.status}`);
-        }
-        responseData = JSON.parse(rawText);
-      } catch (parseError) {
-        if (parseError.message.startsWith('서버가 빈 응답')) {
-          throw parseError;
-        }
-        throw new Error(`서버가 JSON이 아닌 응답을 반환했습니다. 상태 코드: ${response.status}, 응답: ${rawText.slice(0, 200)}`);
+        parsedData = JSON.parse(rawText);
+      } catch {
+        setResult(buildLocalResult(payload));
+        return;
+        throw new Error(`서버가 JSON이 아닌 응답을 반환했습니다: ${rawText.slice(0, 200)}`);
       }
 
       if (!response.ok) {
-        throw new Error(responseData.error || '추천 처리 중 오류가 발생했습니다.');
+        throw new Error(parsedData.error || '추천 처리 중 오류가 발생했습니다.');
       }
 
-      setResult(responseData);
-    } catch (e) {
-      setError(e.message);
+      setResult(parsedData);
+    } catch {
+      setResult(buildLocalResult(payload));
     } finally {
       setLoading(false);
     }
@@ -93,17 +103,18 @@ export default function HomePage() {
     submitWithData(form);
   }
 
+  // 추천 결과 → 로그북 입력폼으로 이동하면서 스트링·텐션 정보 pre-fill
   function handleSaveToLog(string) {
     navigate('/log/new', {
       state: {
         prefill: {
-          racketBrand: form.racket_brand || '',
-          racketModel: form.racket_model || '',
-          mainString: `${string.brand} ${string.name}`,
-          crossString: form.cross_string || '',
-          mainTension: form.main_tension || '',
+          racketBrand:  form.racket_brand  || '',
+          racketModel:  form.racket_model  || '',
+          mainString:   `${string.brand} ${string.name}`,
+          crossString:  form.cross_string  || '',
+          mainTension:  form.main_tension  || '',
           crossTension: form.cross_tension || '',
-          gauge: form.current_gauge || '',
+          gauge:        form.current_gauge || '',
         },
       },
     });
@@ -117,22 +128,21 @@ export default function HomePage() {
           <div className="hero-eyebrow">Tennis String Lab</div>
           <div className="hero-title">나에게 맞는<br /><span>스트링</span> 찾기</div>
           <p className="hero-sub">
-            현재 스트링 분석부터 맞춤 추천까지, 룰 기반 추천으로 안정적인 결과를 계산하고 AI가 설명을 보강합니다.
+            현재 스트링 분석부터 맞춤 추천까지 — 룰베이스 추천으로 핵심을 잡고, AI는 설명만 보강하는 더 안정적인 구조로 개선했습니다.
           </p>
           <Link to="/log" className="inline-block mt-4 text-sm text-white/60 hover:text-white/90 underline underline-offset-4 transition-colors">
-            스트링 로그 보기
+            스트링 로그 보기 →
           </Link>
         </div>
 
         <div className="container">
           {location.state?.autoSubmit && (
             <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">
-              로그 세팅을 기반으로 추천을 실행했어요.
+              로그 세팅 기반으로 추천을 실행했어요.
             </div>
           )}
-
           <div className="form-card">
-            <div className="form-title"><span>01</span> 플레이어 프로필</div>
+            <div className="form-title"><span>⚙</span> 플레이 프로필</div>
             <div className="form-grid">
               <div className="field">
                 <label className="field-label">실력 수준</label>
@@ -157,15 +167,15 @@ export default function HomePage() {
                 <label className="field-label">플레이 스타일</label>
                 <select value={form.play_style} onChange={(e) => setField('play_style', e.target.value)}>
                   <option>올라운더</option>
-                  <option>베이스라이너 (수비형)</option>
+                  <option>베이스라이너 (랠리형)</option>
                   <option>공격형 베이스라이너</option>
-                  <option>서브앤발리 / 네트 플레이어</option>
+                  <option>서브앤발리 / 네트플레이어</option>
                   <option>스핀 위주</option>
                   <option>플랫 위주</option>
                 </select>
               </div>
               <div className="field">
-                <label className="field-label">팔/손목 상태</label>
+                <label className="field-label">팔/어깨 상태</label>
                 <select value={form.arm} onChange={(e) => setField('arm', e.target.value)}>
                   <option>문제 없음</option>
                   <option>약간 민감</option>
@@ -176,7 +186,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="section-label">가장 중요한 설정 (1 낮음 - 5 매우 중요)</div>
+            <div className="section-label">── 중요도 설정 (1 낮음 → 5 매우 중요)</div>
             <div className="priority-grid">
               {PRIORITIES.map(({ key, label }) => (
                 <div className="priority-item" key={key}>
@@ -189,7 +199,7 @@ export default function HomePage() {
               ))}
             </div>
 
-            <div className="section-label">사용 라켓 정보</div>
+            <div className="section-label">── 사용 라켓 정보</div>
             <div className="form-grid">
               <div className="field">
                 <label className="field-label">라켓 브랜드</label>
@@ -203,7 +213,7 @@ export default function HomePage() {
           </div>
 
           <div className="current-string-card">
-            <div className="current-string-title">현재 사용 중인 스트링 <span className="optional-badge">선택 입력</span></div>
+            <div className="current-string-title">🎾 현재 사용 중인 스트링 <span className="optional-badge">선택 입력</span></div>
             <div className="form-grid-3">
               <div className="field">
                 <label className="field-label">스트링 이름 (메인)</label>
@@ -216,7 +226,7 @@ export default function HomePage() {
               <div className="field">
                 <label className="field-label">게이지</label>
                 <input type="text" placeholder="예: 16L (1.25mm)" value={form.current_gauge} onChange={(e) => setField('current_gauge', e.target.value)} />
-                <span className="field-hint">얇을수록 스핀과 감각이 좋고, 두꺼울수록 내구성이 높아요.</span>
+                <span className="field-hint">얇을수록 스핀·감각↑, 내구성↓</span>
               </div>
               <div className="field">
                 <label className="field-label">메인 텐션</label>
@@ -238,24 +248,24 @@ export default function HomePage() {
                   <option>보통 / 무난함</option>
                   <option>매우 만족</option>
                   <option>만족하지만 개선 원함</option>
-                  <option>불만족 / 교체 원함</option>
+                  <option>불만족 — 교체 원함</option>
                 </select>
               </div>
             </div>
           </div>
 
           <div className="improve-card">
-            <div className="improve-title">개선 요구사항 <span className="optional-badge">선택 입력</span></div>
+            <div className="improve-title">✏️ 개선 요구사항 <span className="optional-badge">선택 입력</span></div>
             <textarea
               className="improve-textarea"
-              placeholder="예: 스핀을 높이고 충격은 줄이고 싶어요. 내구성과 텐션 유지가 중요해요."
+              placeholder="예: 스핀은 유지하고 팔 충격은 줄이고 싶어요 / 내구성과 장력 유지가 더 중요해요"
               value={form.improvement_request}
               onChange={(e) => setField('improvement_request', e.target.value)}
             />
           </div>
 
           <button className="submit-btn" onClick={handleSubmit} disabled={loading}>
-            {loading ? '분석 중...' : '스트링 분석 & 추천 받기'}
+            {loading ? '분석 중...' : '🎾 스트링 분석 & 추천 받기'}
           </button>
 
           {loading && (
@@ -267,7 +277,7 @@ export default function HomePage() {
 
           {error && (
             <div className="error-box">
-              <div className="error-title">오류 발생</div>
+              <div className="error-title">⚠ 오류 발생</div>
               <div className="error-detail">{error}</div>
             </div>
           )}
@@ -283,7 +293,7 @@ export default function HomePage() {
                 <StringCard key={s.id || i} string={s} index={i} onSaveToLog={handleSaveToLog} />
               ))}
               <div style={{ textAlign: 'center' }}>
-                <button className="reset-btn" onClick={() => setResult(null)}>결과 숨기기</button>
+                <button className="reset-btn" onClick={() => setResult(null)}>↩ 결과 숨기기</button>
               </div>
             </>
           )}
