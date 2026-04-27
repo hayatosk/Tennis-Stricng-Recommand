@@ -31,6 +31,11 @@ export default function HomePage() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [swingVideoFile, setSwingVideoFile] = useState(null);
+  const [swingVideoPreview, setSwingVideoPreview] = useState('');
+  const [swingAnalysis, setSwingAnalysis] = useState(null);
+  const [swingLoading, setSwingLoading] = useState(false);
+  const [swingError, setSwingError] = useState(null);
 
   useEffect(() => {
     const saved = loadSavedForm(defaultForm);
@@ -44,10 +49,134 @@ export default function HomePage() {
     saveForm(form);
   }, [form]);
 
+  useEffect(() => {
+    return () => {
+      if (swingVideoPreview) URL.revokeObjectURL(swingVideoPreview);
+    };
+  }, [swingVideoPreview]);
+
   const hasCurrentString = useMemo(() => form.current_string.trim().length > 0, [form.current_string]);
 
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const setPriority = (key, value) => setForm((prev) => ({ ...prev, priorities: { ...prev.priorities, [key]: Number(value) } }));
+
+  function waitForMediaEvent(target, eventName) {
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        target.removeEventListener(eventName, handleSuccess);
+        target.removeEventListener('error', handleError);
+      };
+      const handleSuccess = () => {
+        cleanup();
+        resolve();
+      };
+      const handleError = () => {
+        cleanup();
+        reject(new Error('영상을 읽는 중 문제가 발생했습니다.'));
+      };
+      target.addEventListener(eventName, handleSuccess, { once: true });
+      target.addEventListener('error', handleError, { once: true });
+    });
+  }
+
+  async function captureSwingFrames(file) {
+    const video = document.createElement('video');
+    const objectUrl = URL.createObjectURL(file);
+    video.src = objectUrl;
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+
+    try {
+      await waitForMediaEvent(video, 'loadedmetadata');
+      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 6;
+      const times = [0.12, 0.28, 0.44, 0.6, 0.76, 0.9].map((ratio) => Math.min(duration - 0.05, duration * ratio));
+      const canvas = document.createElement('canvas');
+      const width = Math.min(video.videoWidth || 720, 720);
+      const height = Math.max(1, Math.round(width * ((video.videoHeight || 405) / (video.videoWidth || 720))));
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+
+      const frames = [];
+      for (const time of times) {
+        video.currentTime = Math.max(0, time);
+        await waitForMediaEvent(video, 'seeked');
+        context.drawImage(video, 0, 0, width, height);
+        frames.push(canvas.toDataURL('image/jpeg', 0.78).split(',')[1]);
+      }
+      return frames;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  function handleVideoChange(event) {
+    const file = event.target.files?.[0];
+    if (swingVideoPreview) URL.revokeObjectURL(swingVideoPreview);
+    setSwingVideoFile(file || null);
+    setSwingVideoPreview(file ? URL.createObjectURL(file) : '');
+    setSwingAnalysis(null);
+    setSwingError(null);
+  }
+
+  function mergeImprovementRequest(current, note) {
+    if (!note) return current || '';
+    const prefix = current?.trim() ? `${current.trim()} ` : '';
+    return `${prefix}[스윙 분석] ${note}`.slice(0, 300);
+  }
+
+  async function handleAnalyzeSwing() {
+    if (!swingVideoFile) {
+      setSwingError('먼저 스윙 영상을 선택해 주세요.');
+      return;
+    }
+
+    setSwingLoading(true);
+    setSwingError(null);
+
+    try {
+      const frames = await captureSwingFrames(swingVideoFile);
+      const response = await fetch('/api/analyze-swing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ frames }),
+      });
+      const rawText = await response.text();
+      let data = null;
+      try {
+        data = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        throw new Error('스윙 분석 API가 JSON 응답을 반환하지 않았습니다. 로컬에서는 Vercel API 라우트가 실행되는 환경에서 테스트해 주세요.');
+      }
+      if (!response.ok) {
+        throw new Error(data?.error || '스윙 분석 중 오류가 발생했습니다. 로컬에서는 Vercel API 라우트가 실행되는 환경에서 테스트해 주세요.');
+      }
+
+      const analysis = data?.analysis;
+      if (!analysis) {
+        throw new Error('스윙 분석 결과가 비어 있습니다. 잠시 후 다시 시도해 주세요.');
+      }
+      setSwingAnalysis(analysis);
+      setForm((prev) => ({
+        ...prev,
+        swing: analysis.swing || prev.swing,
+        play_style: analysis.play_style || prev.play_style,
+        priorities: {
+          ...prev.priorities,
+          ...Object.fromEntries(
+            Object.entries(analysis.priorities || {}).map(([key, value]) => [key, Math.min(5, Math.max(1, Number(value) || prev.priorities[key] || 3))]),
+          ),
+        },
+        improvement_request: mergeImprovementRequest(prev.improvement_request, analysis.recommendation_note),
+        swing_analysis: analysis,
+      }));
+    } catch (err) {
+      setSwingError(err.message || '스윙 분석 중 오류가 발생했습니다.');
+    } finally {
+      setSwingLoading(false);
+    }
+  }
 
   function buildLocalResult(payload) {
     return {
@@ -60,10 +189,9 @@ export default function HomePage() {
     setLoading(true);
     setError(null);
     setResult(null);
+    const payload = sanitizeForm(data);
 
     try {
-      const payload = sanitizeForm(data);
-
       const response = await fetch('/api/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -84,7 +212,6 @@ export default function HomePage() {
       } catch {
         setResult(buildLocalResult(payload));
         return;
-        throw new Error(`서버가 JSON이 아닌 응답을 반환했습니다: ${rawText.slice(0, 200)}`);
       }
 
       if (!response.ok) {
@@ -250,6 +377,39 @@ export default function HomePage() {
                   <option>만족하지만 개선 원함</option>
                   <option>불만족 — 교체 원함</option>
                 </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="swing-video-card">
+            <div className="swing-video-title">🎥 스윙 영상 분석 <span className="optional-badge">선택 입력</span></div>
+            <div className="swing-video-layout">
+              <div className="swing-video-panel">
+                <input className="video-input" type="file" accept="video/*" onChange={handleVideoChange} />
+                {swingVideoPreview && <video className="swing-preview" src={swingVideoPreview} controls muted playsInline />}
+                <button className="swing-analyze-btn" onClick={handleAnalyzeSwing} disabled={swingLoading || !swingVideoFile}>
+                  {swingLoading ? '영상 프레임 분석 중...' : '스윙 스타일 분석하기'}
+                </button>
+                {swingError && <div className="swing-error">{swingError}</div>}
+              </div>
+              <div className="swing-analysis-panel">
+                {swingAnalysis ? (
+                  <>
+                    <div className="swing-pill-row">
+                      <span className="tag highlight">{swingAnalysis.swing}</span>
+                      <span className="tag">{swingAnalysis.play_style}</span>
+                      <span className="tag">신뢰도 {swingAnalysis.confidence || '보통'}</span>
+                    </div>
+                    <p className="swing-summary">{swingAnalysis.summary}</p>
+                    <div className="swing-observations">
+                      {(swingAnalysis.observations || []).slice(0, 3).map((item) => (
+                        <div key={item} className="swing-observation">• {item}</div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="swing-empty">옆이나 뒤에서 찍은 포핸드/백핸드 영상을 올리면 스윙 속도, 스핀 성향, 컨트롤/파워 우선순위를 폼에 자동 반영합니다.</p>
+                )}
               </div>
             </div>
           </div>

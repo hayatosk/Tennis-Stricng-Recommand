@@ -1,3 +1,5 @@
+/* global process */
+
 import { analyzeCurrentString, getRuleBasedRecommendations } from '../lib/recommend.js';
 
 function buildPrompt(form, currentAnalysis, recommendations) {
