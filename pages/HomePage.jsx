@@ -10,10 +10,10 @@ import { loadSavedForm, saveForm } from '../lib/storage';
 import { ALL_STRING_OPTIONS, GAUGE_OPTIONS, POLYGON_TYPES, PRIMARY_SHAPES } from '../lib/stringBrands';
 
 const defaultForm = {
-  level: '중급 (NTRP 3.0~4.0)',
-  swing: '보통',
-  play_style: '올라운더',
-  arm: '문제 없음',
+  level: '',
+  swing: '',
+  play_style: '',
+  arm: '',
   racket_brand: '',
   racket_model: '',
   current_string: '',
@@ -24,7 +24,7 @@ const defaultForm = {
   cross_tension: '',
   cross_string: '',
   cross_shape: '',
-  satisfaction: '보통 / 무난함',
+  satisfaction: '',
   improvement_request: '',
   priorities: { spin: 3, power: 3, control: 4, comfort: 3 },
 };
@@ -69,9 +69,9 @@ export default function HomePage() {
   const [swingError, setSwingError] = useState(null);
 
   useEffect(() => {
-    const saved = loadSavedForm(defaultForm);
-    setForm(saved);
     if (location.state?.autoSubmit) {
+      const saved = loadSavedForm(defaultForm);
+      setForm(saved);
       submitWithData(saved);
     }
   }, []);
@@ -320,6 +320,7 @@ export default function HomePage() {
               <div className="field">
                 <label className="field-label">실력 수준</label>
                 <select value={form.level} onChange={(e) => setField('level', e.target.value)}>
+                  <option value="">선택하세요</option>
                   <option>입문 (NTRP 2.0~2.5)</option>
                   <option>초급 (NTRP 2.5~3.0)</option>
                   <option>중급 (NTRP 3.0~4.0)</option>
@@ -330,6 +331,7 @@ export default function HomePage() {
               <div className="field">
                 <label className="field-label">스윙 속도</label>
                 <select value={form.swing} onChange={(e) => setField('swing', e.target.value)}>
+                  <option value="">선택하세요</option>
                   <option>느림</option>
                   <option>보통</option>
                   <option>빠름</option>
@@ -339,6 +341,7 @@ export default function HomePage() {
               <div className="field">
                 <label className="field-label">플레이 스타일</label>
                 <select value={form.play_style} onChange={(e) => setField('play_style', e.target.value)}>
+                  <option value="">선택하세요</option>
                   <option>올라운더</option>
                   <option>베이스라이너 (랠리형)</option>
                   <option>공격형 베이스라이너</option>
@@ -350,6 +353,7 @@ export default function HomePage() {
               <div className="field">
                 <label className="field-label">팔/어깨 상태</label>
                 <select value={form.arm} onChange={(e) => setField('arm', e.target.value)}>
+                  <option value="">선택하세요</option>
                   <option>문제 없음</option>
                   <option>약간 민감</option>
                   <option>자주 불편함</option>
@@ -417,20 +421,21 @@ export default function HomePage() {
               <div className="field">
                 <label className="field-label">메인 텐션</label>
                 <select value={form.main_tension} onChange={(e) => setField('main_tension', e.target.value)}>
-                  <option value="">모름 / 미입력</option>
+                  <option value="">선택 안 함</option>
                   {Array.from({ length: 41 }, (_, i) => i + 30).map((t) => <option key={t} value={`${t} lbs`}>{t} lbs</option>)}
                 </select>
               </div>
               <div className="field">
                 <label className="field-label">크로스 텐션</label>
                 <select value={form.cross_tension} onChange={(e) => setField('cross_tension', e.target.value)}>
-                  <option value="">메인과 동일</option>
+                  <option value="">선택 안 함</option>
                   {Array.from({ length: 41 }, (_, i) => i + 30).map((t) => <option key={t} value={`${t} lbs`}>{t} lbs</option>)}
                 </select>
               </div>
               <div className="field">
                 <label className="field-label">현재 만족도</label>
                 <select value={form.satisfaction} onChange={(e) => setField('satisfaction', e.target.value)}>
+                  <option value="">선택하세요</option>
                   <option>보통 / 무난함</option>
                   <option>매우 만족</option>
                   <option>만족하지만 개선 원함</option>
