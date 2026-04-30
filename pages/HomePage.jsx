@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import CurrentStringAnalysis from '../components/CurrentStringAnalysis';
 import StringCard from '../components/StringCard';
 import { FONTS, PRIORITIES, styles } from '../lib/constants';
 import { analyzeCurrentString, getRuleBasedRecommendations } from '../lib/recommend';
+import { RACKET_BRANDS, RACKET_MODELS } from '../lib/racketDatabase';
 import { sanitizeForm } from '../lib/sanitize';
 import { loadSavedForm, saveForm } from '../lib/storage';
+import { ALL_STRING_OPTIONS, GAUGE_OPTIONS, POLYGON_TYPES, PRIMARY_SHAPES } from '../lib/stringBrands';
 
 const defaultForm = {
   level: '중급 (NTRP 3.0~4.0)',
@@ -15,14 +17,43 @@ const defaultForm = {
   racket_brand: '',
   racket_model: '',
   current_string: '',
+  current_shape: '',
   current_gauge: '',
+  cross_gauge: '',
   main_tension: '',
   cross_tension: '',
   cross_string: '',
+  cross_shape: '',
   satisfaction: '보통 / 무난함',
   improvement_request: '',
   priorities: { spin: 3, power: 3, control: 4, comfort: 3 },
 };
+
+const GAUGE_VALUES = GAUGE_OPTIONS.map((gauge) => gauge.value);
+const ALL_RACKET_MODELS = Object.values(RACKET_MODELS).flat().sort();
+const SHAPE_OPTIONS = [...PRIMARY_SHAPES, ...POLYGON_TYPES];
+
+function ComboInput({ value, onChange, options, placeholder }) {
+  const id = useId();
+  const uniqueOptions = useMemo(() => [...new Set(options.filter(Boolean))], [options]);
+
+  return (
+    <>
+      <input
+        type="text"
+        list={id}
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <datalist id={id}>
+        {uniqueOptions.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+    </>
+  );
+}
 
 export default function HomePage() {
   const location = useLocation();
@@ -56,9 +87,21 @@ export default function HomePage() {
   }, [swingVideoPreview]);
 
   const hasCurrentString = useMemo(() => form.current_string.trim().length > 0, [form.current_string]);
+  const racketModelOptions = useMemo(() => (
+    form.racket_brand && RACKET_MODELS[form.racket_brand]
+      ? [...RACKET_MODELS[form.racket_brand]].sort()
+      : ALL_RACKET_MODELS
+  ), [form.racket_brand]);
 
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const setPriority = (key, value) => setForm((prev) => ({ ...prev, priorities: { ...prev.priorities, [key]: Number(value) } }));
+  const setRacketBrand = (brand) => {
+    setForm((prev) => ({
+      ...prev,
+      racket_brand: brand,
+      racket_model: brand === prev.racket_brand ? prev.racket_model : '',
+    }));
+  };
 
   function waitForMediaEvent(target, eventName) {
     return new Promise((resolve, reject) => {
@@ -90,7 +133,7 @@ export default function HomePage() {
     try {
       await waitForMediaEvent(video, 'loadedmetadata');
       const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 6;
-      const times = [0.12, 0.28, 0.44, 0.6, 0.76, 0.9].map((ratio) => Math.min(duration - 0.05, duration * ratio));
+      const times = [0.08, 0.18, 0.3, 0.42, 0.55, 0.68, 0.8, 0.92].map((ratio) => Math.min(duration - 0.05, duration * ratio));
       const canvas = document.createElement('canvas');
       const width = Math.min(video.videoWidth || 720, 720);
       const height = Math.max(1, Math.round(width * ((video.videoHeight || 405) / (video.videoWidth || 720))));
@@ -242,6 +285,9 @@ export default function HomePage() {
           mainTension:  form.main_tension  || '',
           crossTension: form.cross_tension || '',
           gauge:        form.current_gauge || '',
+          crossGauge:   form.cross_gauge || '',
+          mainStringShape: form.current_shape || '',
+          crossStringShape: form.cross_shape || '',
         },
       },
     });
@@ -330,11 +376,11 @@ export default function HomePage() {
             <div className="form-grid">
               <div className="field">
                 <label className="field-label">라켓 브랜드</label>
-                <input type="text" placeholder="예: 윌슨, 바볼랏, 요넥스" value={form.racket_brand} onChange={(e) => setField('racket_brand', e.target.value)} />
+                <ComboInput value={form.racket_brand} onChange={setRacketBrand} options={RACKET_BRANDS} placeholder="예: Wilson, Babolat, Yonex" />
               </div>
               <div className="field">
                 <label className="field-label">라켓 모델명</label>
-                <input type="text" placeholder="예: Blade 98, Pure Aero" value={form.racket_model} onChange={(e) => setField('racket_model', e.target.value)} />
+                <ComboInput value={form.racket_model} onChange={(value) => setField('racket_model', value)} options={racketModelOptions} placeholder="예: Blade 98, Pure Aero" />
               </div>
             </div>
           </div>
@@ -344,16 +390,29 @@ export default function HomePage() {
             <div className="form-grid-3">
               <div className="field">
                 <label className="field-label">스트링 이름 (메인)</label>
-                <input type="text" placeholder="예: Hyper-G, ALU Power" value={form.current_string} onChange={(e) => setField('current_string', e.target.value)} />
+                <ComboInput value={form.current_string} onChange={(value) => setField('current_string', value)} options={ALL_STRING_OPTIONS} placeholder="예: Solinco Hyper-G, Luxilon ALU Power" />
               </div>
               <div className="field">
                 <label className="field-label">크로스 스트링 <span className="optional-badge">하이브리드</span></label>
-                <input type="text" placeholder="예: NXT, X-One Biphase" value={form.cross_string} onChange={(e) => setField('cross_string', e.target.value)} />
+                <ComboInput value={form.cross_string} onChange={(value) => setField('cross_string', value)} options={ALL_STRING_OPTIONS} placeholder="예: Wilson NXT, Tecnifibre X-One Biphase" />
               </div>
               <div className="field">
-                <label className="field-label">게이지</label>
-                <input type="text" placeholder="예: 16L (1.25mm)" value={form.current_gauge} onChange={(e) => setField('current_gauge', e.target.value)} />
+                <label className="field-label">메인 형상</label>
+                <ComboInput value={form.current_shape} onChange={(value) => setField('current_shape', value)} options={SHAPE_OPTIONS} placeholder="예: Round, Shaped, 5-sided" />
+                <span className="field-hint">각형/러프 계열은 스핀·컨트롤 쪽으로 반영됩니다</span>
+              </div>
+              <div className="field">
+                <label className="field-label">크로스 형상 <span className="optional-badge">다른 경우만</span></label>
+                <ComboInput value={form.cross_shape} onChange={(value) => setField('cross_shape', value)} options={SHAPE_OPTIONS} placeholder="메인과 같으면 비워두세요" />
+              </div>
+              <div className="field">
+                <label className="field-label">메인 게이지</label>
+                <ComboInput value={form.current_gauge} onChange={(value) => setField('current_gauge', value)} options={GAUGE_VALUES} placeholder="예: 1.25mm (16L)" />
                 <span className="field-hint">얇을수록 스핀·감각↑, 내구성↓</span>
+              </div>
+              <div className="field">
+                <label className="field-label">크로스 게이지 <span className="optional-badge">다른 경우만</span></label>
+                <ComboInput value={form.cross_gauge} onChange={(value) => setField('cross_gauge', value)} options={GAUGE_VALUES} placeholder="메인과 같으면 비워두세요" />
               </div>
               <div className="field">
                 <label className="field-label">메인 텐션</label>
@@ -396,9 +455,10 @@ export default function HomePage() {
                 {swingAnalysis ? (
                   <>
                     <div className="swing-pill-row">
-                      <span className="tag highlight">{swingAnalysis.swing}</span>
+                      <span className="tag highlight">{swingAnalysis.stroke_label || '스트로크 판단 불가'}</span>
+                      <span className="tag">{swingAnalysis.swing}</span>
                       <span className="tag">{swingAnalysis.play_style}</span>
-                      <span className="tag">신뢰도 {swingAnalysis.confidence || '보통'}</span>
+                      <span className="tag">신뢰도 {swingAnalysis.stroke_confidence || swingAnalysis.confidence || '보통'}</span>
                     </div>
                     <p className="swing-summary">{swingAnalysis.summary}</p>
                     <div className="swing-observations">
@@ -415,9 +475,10 @@ export default function HomePage() {
           </div>
 
           <div className="improve-card">
-            <div className="improve-title">✏️ 개선 요구사항 <span className="optional-badge">선택 입력</span></div>
+            <div className="improve-title">✏️ 개선/요구사항 <span className="optional-badge">선택 입력</span></div>
             <textarea
               className="improve-textarea"
+              rows={5}
               placeholder="예: 스핀은 유지하고 팔 충격은 줄이고 싶어요 / 내구성과 장력 유지가 더 중요해요"
               value={form.improvement_request}
               onChange={(e) => setField('improvement_request', e.target.value)}

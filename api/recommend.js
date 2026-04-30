@@ -9,7 +9,9 @@ function buildPrompt(form, currentAnalysis, recommendations) {
 - 순위는 유지한다.
 - 존재하지 않는 스트링/스펙을 지어내지 않는다.
 - 각 추천의 reason만 2문장 이내로 자연스럽게 다듬는다.
-- 현재 스트링 비교가 있으면 vs_current도 1문장으로 다듬는다.
+- vs_current가 객체이면 summary, advantages, cautions 구조를 유지하고 문장만 자연스럽게 다듬는다.
+- hybrid_combo가 객체이면 position, full_bed, as_main, as_cross, recommendation 구조를 유지한다.
+- 하이브리드 설명은 추천 스트링을 메인에 쓸 때와 크로스에 쓸 때를 구분하고, 메인 사용 시 어울리는 크로스 스트링 후보를 유지한다.
 - JSON만 반환한다.
 
 플레이어 입력:

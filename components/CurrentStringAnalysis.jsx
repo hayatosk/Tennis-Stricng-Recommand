@@ -12,8 +12,10 @@ export default function CurrentStringAnalysis({ analysis }) {
           <div className="analysis-eyebrow">현재 스트링 분석</div>
           <div className="analysis-string-name">{analysis.string_name}</div>
           <div className="analysis-meta">
+            {analysis.shape && `형상 ${analysis.shape}`}
+            {analysis.shape && analysis.gauge && ' · '}
             {analysis.gauge && `게이지 ${analysis.gauge}`}
-            {analysis.gauge && analysis.tension && ' · '}
+            {(analysis.shape || analysis.gauge) && analysis.tension && ' · '}
             {analysis.tension && `텐션 ${analysis.tension}`}
           </div>
         </div>
